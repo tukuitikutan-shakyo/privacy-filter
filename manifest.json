@@ -1,0 +1,19 @@
+{
+  "name": "個人情報除去フィルター（オフライン完結）",
+  "short_name": "個人情報除去",
+  "description": "相談ケースの文章から人名・住所・電話番号をブラウザ内だけで自動・手動置換する完全オフライン対応ツール",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4F6F9",
+  "theme_color": "#0017C1",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%230017C1'/%3E%3Cpath d='M96 34L44 56v40c0 33 22 61 52 70 30-9 52-37 52-70V56L96 34z' fill='%23FFFFFF'/%3E%3Cpath d='M84 114l-18-18 9-9 9 9 31-31 9 9-40 40z' fill='%230A7F3E'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0017C1">
+  <title>個人情報除去フィルター（完全オフライン完結）</title>
+  <link rel="manifest" href="./manifest.json">
+  <style>
+    :root {
+      /* デジタル庁デザインシステム準拠の高コントラスト配色 */
+      --color-bg: #F4F6F9;
+      --color-surface: #FFFFFF;
+      --color-text: #1A1A1C;
+      --color-text-sub: #4D4D54;
+      --color-border: #94949C;
+      --color-border-light: #D8D8DF;
+      --color-primary: #0017C1;
+      --color-primary-hover: #00118F;
+      --color-online-bg: #0052CC;
+      --color-offline-bg: #0A7F3E;
+      --color-danger: #C92A2A;
+      --color-danger-hover: #A61E1E;
+      --color-danger-bg: #FFF5F5;
+      --color-mark-auto: #FFF3BF;
+      --color-mark-manual: #D0EBFF;
+      --color-focus: #FFB700;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font-sans: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-sans);
+      font-size: 17px;
+      line-height: 1.7;
+      color: var(--color-text);
+      background-color: var(--color-bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 上部リアルタイム通信ステータスバー */
+    .status-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 12px 16px;
+      color: #FFFFFF;
+      font-weight: 700;
+      font-size: 16px;
+      text-align: center;
+      transition: background-color 0.35s ease;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.14);
+    }
+
+    .status-bar.is-online {
+      background-color: var(--color-online-bg);
+    }
+
+    .status-bar.is-offline {
+      background-color: var(--color-offline-bg);
+    }
+
+    .status-sub {
+      display: block;
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 400;
+      opacity: 0.95;
+    }
+
+    /* メインコンテナ */
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    .header {
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      line-height: 1.4;
+      color: var(--color-text);
+    }
+
+    .header p {
+      margin: 0;
+      font-size: 15px;
+      color: var(--color-text-sub);
+    }
+
+    .dict-pill {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 700;
+      background-color: #E7F5FF;
+      color: #0B4F8C;
+      border: 1px solid #A5D8FF;
+    }
+
+    .dict-pill.is-ready {
+      background-color: #EBFBEE;
+      color: #1B5E20;
+      border-color: #8CE99A;
+    }
+
+    .dict-pill.is-error {
+      background-color: var(--color-danger-bg);
+      color: var(--color-danger);
+      border-color: #FFA8A8;
+    }
+
+    /* カードセクション */
+    .card {
+      background-color: var(--color-surface);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .section-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    /* フォーム要素 */
+    textarea,
+    input[type="text"] {
+      width: 100%;
+      font-family: var(--font-sans);
+      font-size: 17px;
+      line-height: 1.7;
+      color: var(--color-text);
+      background-color: #FFFFFF;
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    textarea:focus,
+    input[type="text"]:focus,
+    button:focus-visible {
+      outline: 3px solid var(--color-focus);
+      outline-offset: 2px;
+      border-color: var(--color-primary);
+    }
+
+    textarea {
+      min-height: 180px;
+      resize: vertical;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .field-hint {
+      display: block;
+      font-size: 13px;
+      color: var(--color-text-sub);
+      margin-bottom: 8px;
+    }
+
+    /* ボタン群 */
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 48px;
+      padding: 10px 20px;
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 700;
+      border-radius: var(--radius-md);
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.08s, opacity 0.2s;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background-color: var(--color-primary);
+      color: #FFFFFF;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background-color: var(--color-primary-hover);
+    }
+
+    .btn-secondary {
+      background-color: #FFFFFF;
+      color: var(--color-primary);
+      border-color: var(--color-primary);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background-color: #EEF2FF;
+    }
+
+    .btn-subtle {
+      min-height: 40px;
+      padding: 6px 14px;
+      font-size: 14px;
+      background-color: #F1F3F5;
+      color: var(--color-text);
+      border-color: var(--color-border-light);
+    }
+
+    .btn-subtle:hover:not(:disabled) {
+      background-color: #E2E6EA;
+    }
+
+    .btn-danger {
+      background-color: var(--color-danger);
+      color: #FFFFFF;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background-color: var(--color-danger-hover);
+    }
+
+    .btn-success {
+      background-color: var(--color-offline-bg);
+      color: #FFFFFF;
+    }
+
+    .btn-success:hover:not(:disabled) {
+      background-color: #086330;
+    }
+
+    /* コントロールバー */
+    .control-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .action-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--color-border-light);
+    }
+
+    /* 出力エリア（リッチテキスト表示枠） */
+    .output-box {
+      min-height: 180px;
+      padding: 16px;
+      border: 2px solid var(--color-primary);
+      border-radius: var(--radius-md);
+      background-color: #FAFCFF;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 17px;
+      line-height: 1.85;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    .output-placeholder {
+      color: #767680;
+    }
+
+    .masked-auto {
+      background-color: var(--color-mark-auto);
+      color: var(--color-text);
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 4px;
+      border: 1px solid #F0C419;
+    }
+
+    .masked-manual {
+      background-color: var(--color-mark-manual);
+      color: var(--color-text);
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 4px;
+      border: 1px solid #74C0FC;
+    }
+
+    /* 手動置換ルール一覧バッジ */
+    .rules-wrap {
+      margin-bottom: 12px;
+    }
+
+    .rules-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .rule-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background-color: #E7F5FF;
+      border: 1px solid #74C0FC;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .rule-remove-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border: none;
+      border-radius: 50%;
+      background-color: #1C7ED6;
+      color: #FFFFFF;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .rule-remove-btn:hover {
+      background-color: var(--color-danger);
+    }
+
+    /* 選択テキスト用フローティングメニュー */
+    .floating-menu {
+      position: fixed;
+      z-index: 300;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      max-width: calc(100vw - 24px);
+      padding: 10px;
+      background-color: #1A1A1C;
+      color: #FFFFFF;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+    }
+
+    .floating-menu.is-open {
+      display: flex;
+    }
+
+    .floating-menu-header {
+      font-size: 13px;
+      color: #D0D0D8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .floating-target-preview {
+      font-weight: 700;
+      color: #FFE066;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .floating-btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .floating-btn {
+      padding: 8px 11px;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 700;
+      color: #1A1A1C;
+      background-color: #FFFFFF;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .floating-btn:hover {
+      background-color: #FFE066;
+    }
+
+    .floating-btn-person {
+      background-color: #FFD43B;
+    }
+
+    .floating-custom-row {
+      display: none;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .floating-custom-row.is-open {
+      display: flex;
+    }
+
+    .floating-custom-input {
+      flex: 1;
+      min-width: 140px;
+      padding: 7px 10px !important;
+      font-size: 14px !important;
+      border-radius: 6px !important;
+    }
+
+    /* コピー後の自動消去カウントダウンバー */
+    .countdown-banner {
+      display: none;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      background-color: #FFF4E6;
+      border: 2px solid #F76707;
+      color: #7A2E00;
+      font-weight: 700;
+    }
+
+    .countdown-banner.is-visible {
+      display: flex;
+    }
+
+    /* 完全消去完了通知バナー */
+    .wipe-banner {
+      display: none;
+      margin-bottom: 20px;
+      padding: 16px 20px;
+      border-radius: var(--radius-md);
+      background-color: #1A1A1C;
+      color: #FFFFFF;
+      border-left: 6px solid #40C057;
+      font-size: 17px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .wipe-banner.is-visible {
+      display: block;
+      animation: fadeInBanner 0.3s ease;
+    }
+
+    /* シュレッダー風消去アニメーション */
+    .shredding {
+      animation: shredOut 0.45s ease-in forwards;
+      pointer-events: none;
+    }
+
+    @keyframes shredOut {
+      0% {
+        opacity: 1;
+        transform: translateY(0) scaleY(1);
+        filter: blur(0);
+      }
+      50% {
+        opacity: 0.45;
+        transform: translateY(10px) scaleY(0.92);
+        filter: blur(3px);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(28px) scaleY(0.75);
+        filter: blur(8px);
+      }
+    }
+
+    @keyframes fadeInBanner {
+      from {
+        opacity: 0;
+        transform: translateY(-6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* コピー完了トースト */
+    .copy-feedback {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--color-offline-bg);
+      min-height: 24px;
+    }
+
+    /* フッター：0バイト計器表示 */
+    .security-footer {
+      background-color: #1A1A1C;
+      color: #F4F6F9;
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      margin-top: 24px;
+    }
+
+    .meter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+    }
+
+    .meter-item {
+      background-color: #2B2B30;
+      border: 1px solid #44444D;
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+    }
+
+    .meter-label {
+      display: block;
+      font-size: 13px;
+      color: #C2C2CC;
+      margin-bottom: 4px;
+    }
+
+    .meter-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #69DB7C;
+    }
+
+    .meter-note {
+      margin: 12px 0 0;
+      font-size: 13px;
+      color: #C2C2CC;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 600px) {
+      .header h1 {
+        font-size: 21px;
+      }
+
+      .btn {
+        width: 100%;
+      }
+
+      .section-header .btn-subtle {
+        width: auto;
+      }
+
+      .countdown-banner .btn-subtle {
+        width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- リアルタイム通信状態バー -->
+  <div id="networkStatusBar" class="status-bar is-online" role="status" aria-live="polite">
+    <span id="networkStatusText">🛡️ ブラウザ内完結モード（外部サーバーへのデータ送信機能なし）</span>
+    <span id="offlineReadyNote" class="status-sub">オフライン起動キャッシュを確認中...</span>
+  </div>
+
+  <main class="container">
+    <header class="header">
+      <h1>個人情報除去フィルター</h1>
+      <p>相談ケースの文章から人名（A・B…）、住所、電話番号をブラウザ内だけで自動置換します。</p>
+      <div id="dictStatus" class="dict-pill">日本語辞書を読み込み中...</div>
+    </header>
+
+    <!-- 完全消去完了メッセージ -->
+    <div id="wipeBanner" class="wipe-banner" role="alert">
+      🗑️ メモリから完全に消去しました（復元不可）
+    </div>
+
+    <!-- 1. 入力エリア -->
+    <section class="card" aria-labelledby="inputHeading">
+      <div class="section-header">
+        <h2 id="inputHeading" class="section-title">1. 原文を入力（相談ケース）</h2>
+        <div class="btn-row">
+          <button type="button" id="sampleBtn" class="btn btn-subtle">デモ用サンプル文を入れる</button>
+          <button type="button" id="clearInputBtn" class="btn btn-subtle">入力欄を空にする</button>
+        </div>
+      </div>
+
+      <textarea
+        id="inputText"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        placeholder="ここに相談ケースの文章を貼り付けてください。&#10;例：相模原市南区相模大野3-1-1の佐藤太郎さん（090-1234-5678）から相談あり。"
+      ></textarea>
+    </section>
+
+    <!-- 2. 変換・微調整コントロール -->
+    <section class="card" aria-labelledby="controlHeading">
+      <h2 id="controlHeading" class="section-title" style="margin-bottom: 12px;">2. 変換と除外設定</h2>
+      <div class="control-grid">
+        <div>
+          <label for="excludeWords" class="field-label">除外ワード（人名変換したくない単語）</label>
+          <span class="field-hint">地名・施設名・一般名詞が誤ってAやBに変わった場合、読点（、）またはスペース区切りで入力してください。</span>
+          <input
+            type="text"
+            id="excludeWords"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="例：相模原、担当、民生委員"
+          >
+        </div>
+
+        <div class="action-bar">
+          <button type="button" id="convertBtn" class="btn btn-primary" disabled>
+            個人情報を除去する
+          </button>
+          <button type="button" id="wipeBtn" class="btn btn-danger">
+            🗑️ 今すぐ完全消去（メモリ破棄）
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 出力エリア -->
+    <section class="card" aria-labelledby="outputHeading">
+      <div class="section-header">
+        <h2 id="outputHeading" class="section-title">3. 変換結果（選択して手動で追加置換できます）</h2>
+        <span id="copyFeedback" class="copy-feedback" aria-live="polite"></span>
+      </div>
+
+      <p class="field-hint">
+        変換漏れした名前や病院名などを<strong>ドラッグ（スマホは長押し）で選択</strong>すると、その場に表示されるメニューから一括置換できます。
+      </p>
+
+      <!-- 手動追加ルール一覧（Undo用） -->
+      <div id="manualRulesSection" class="rules-wrap hidden">
+        <span class="field-label" style="font-size: 14px; margin-bottom: 2px;">手動追加した置換ルール（×で元に戻す）</span>
+        <div id="manualRulesList" class="rules-list"></div>
+      </div>
+
+      <!-- リッチテキスト出力枠 -->
+      <div id="outputDisplay" class="output-box" tabindex="0" role="region" aria-label="変換結果テキスト">
+        <span class="output-placeholder">「個人情報を除去する」を押すと、ここに結果が表示されます。</span>
+      </div>
+
+      <div class="btn-row" style="margin-top: 16px;">
+        <button type="button" id="copyBtn" class="btn btn-success" disabled>
+          📋 結果をコピー（プレーンテキスト）
+        </button>
+      </div>
+
+      <!-- コピー後の30秒自動消去カウントダウン -->
+      <div id="countdownBanner" class="countdown-banner" role="status" aria-live="polite">
+        <span id="countdownText">セキュリティのため30秒後に自動消去します（残り 30秒）</span>
+        <div class="btn-row">
+          <button type="button" id="extendTimerBtn" class="btn btn-subtle">+30秒延長</button>
+          <button type="button" id="cancelTimerBtn" class="btn btn-subtle">自動消去を止める</button>
+          <button type="button" id="wipeNowFromTimerBtn" class="btn btn-danger" style="min-height: 40px; padding: 6px 14px; font-size: 14px;">今すぐ消去</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 0バイト計器フッター -->
+    <footer class="security-footer" aria-label="セキュリティ状態表示">
+      <div class="meter-grid">
+        <div class="meter-item">
+          <span class="meter-label">外部送信データ量</span>
+          <span class="meter-value">0 KB（送信機能なし）</span>
+        </div>
+        <div class="meter-item">
+          <span class="meter-label">端末内保存データ</span>
+          <span class="meter-value">0 KB（履歴・Cookie不使用）</span>
+        </div>
+        <div class="meter-item">
+          <span class="meter-label">画面を閉じた場合</span>
+          <span class="meter-value">即座に完全消滅</span>
+        </div>
+      </div>
+      <p class="meter-note">
+        ※本アプリは localStorage / sessionStorage / IndexedDB / Cookie を一切使用せず、入力文はブラウザの一時メモリ（RAM）上でのみ処理されます。
+      </p>
+    </footer>
+  </main>
+
+  <!-- 選択テキスト用フローティングアクションバー -->
+  <div id="floatingMenu" class="floating-menu" role="dialog" aria-label="手動置換メニュー">
+    <div class="floating-menu-header">
+      <span>選択中：<span id="floatingTargetPreview" class="floating-target-preview"></span></span>
+      <button type="button" id="closeFloatingBtn" class="floating-btn" style="padding: 2px 8px; font-size: 12px;">閉じる</button>
+    </div>
+    <div class="floating-btn-group">
+      <button type="button" id="btnReplacePerson" class="floating-btn floating-btn-person">次の人名 (A)</button>
+      <button type="button" class="floating-btn" data-label="【施設名】">【施設名】</button>
+      <button type="button" class="floating-btn" data-label="【団体・機関】">【団体・機関】</button>
+      <button type="button" class="floating-btn" data-label="【地名】">【地名】</button>
+      <button type="button" id="btnToggleCustom" class="floating-btn">任意ラベル...</button>
+    </div>
+    <div id="floatingCustomRow" class="floating-custom-row">
+      <input
+        type="text"
+        id="floatingCustomInput"
+        class="floating-custom-input"
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck="false"
+        placeholder="例：【勤務先】"
+      >
+      <button type="button" id="btnApplyCustom" class="floating-btn floating-btn-person">適用</button>
+    </div>
+  </div>
+
+  <script src="./dict/kuromoji.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
